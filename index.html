@@ -3,23 +3,177 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Harvey Aquini</title>
+  <title>Registro rápido de tarea</title>
   <style>
-    body { font-family: Calibri, Arial, sans-serif; margin: 0; background: #f7fafc; color: #1f2d3d; text-align: center; padding: 80px 24px; }
-    h1 { color: #051c2c; font-size: 2.4rem; }
-    p { font-size: 1.2rem; }
-    .boton-comenzar { margin-top: 32px; padding: 14px 36px; font-size: 1.1rem; font-family: inherit; color: #ffffff; background: #1e6fd9; border: none; border-radius: 8px; cursor: pointer; }
-    .boton-comenzar:hover { background: #1858b0; }
+    :root { --azul: #1e6fd9; --azul-oscuro: #1858b0; --texto: #1f2d3d; --suave: #55657a; --fondo: #f7fafc; --borde: #d5dde6; }
+    * { box-sizing: border-box; }
+    body { font-family: Calibri, Arial, sans-serif; margin: 0; background: var(--fondo); color: var(--texto); padding: 32px 16px; }
+    main { max-width: 520px; margin: 0 auto; }
+    h1 { color: #051c2c; font-size: 1.8rem; margin: 0 0 4px; }
+    .sub { margin: 0 0 24px; color: var(--suave); }
+    form { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 24px; display: grid; gap: 16px; }
+    label { display: grid; gap: 6px; font-weight: bold; font-size: 0.95rem; }
+    input { font: inherit; font-weight: normal; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 8px; }
+    input:focus { outline: 2px solid var(--azul); border-color: transparent; }
+    .sugerencia { border-left: 4px solid var(--azul); background: #eef5ff; padding: 12px 14px; border-radius: 8px; font-size: 0.95rem; }
+    .sugerencia:empty { display: none; }
+    .error { color: #b42318; font-size: 0.9rem; margin: 0; min-height: 1em; }
+    button { font: inherit; font-size: 1.05rem; padding: 14px; color: #fff; background: var(--azul); border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: var(--azul-oscuro); }
+    h2 { font-size: 1.1rem; margin: 32px 0 12px; }
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    li { background: #fff; border: 1px solid var(--borde); border-radius: 8px; padding: 12px 14px; }
+    li small { color: var(--suave); display: block; margin-top: 4px; }
   </style>
 </head>
 <body>
-  <h1>Harvey Aquini</h1>
-  <p>Hackathon de Salud Mental con IA · UCV</p>
-  <p>Pídele a Claude que cambie esta página.</p>
-  <p id="fecha-actual"></p>
-  <button class="boton-comenzar">Comenzar</button>
+  <main>
+    <h1>Registro rápido de tarea</h1>
+    <p class="sub">Guarda un pendiente en menos de 15 segundos.</p>
+
+    <form id="formulario" novalidate>
+      <label>Nombre del curso
+        <input name="curso" autocomplete="off" placeholder="Ej. Estadística II">
+      </label>
+      <label>Título del avance / informe
+        <input name="titulo" autocomplete="off" placeholder="Ej. Avance 2: regresión lineal">
+      </label>
+      <label>Fecha y hora de entrega
+        <input name="entrega" type="datetime-local">
+      </label>
+
+      <div class="sugerencia" id="sugerencia" aria-live="polite"></div>
+      <p class="error" id="error" role="alert"></p>
+
+      <button type="submit" id="guardar">Guardar pendiente</button>
+    </form>
+
+    <h2>Pendientes guardados</h2>
+    <ul id="lista"></ul>
+  </main>
+
   <script>
-    document.getElementById('fecha-actual').textContent = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const formulario = document.getElementById('formulario');
+    const sugerenciaEl = document.getElementById('sugerencia');
+    const errorEl = document.getElementById('error');
+    const botonGuardar = document.getElementById('guardar');
+    const listaEl = document.getElementById('lista');
+    const entregaInput = formulario.elements.entrega;
+    const CLAVE = 'pendientes';
+    const VENTANAS = [
+      { inicio: 12, fin: 13, motivo: 'pausa del mediodía' },
+      { inicio: 17, fin: 18, motivo: 'después de clases' }
+    ];
+
+    let pendientes = JSON.parse(localStorage.getItem(CLAVE) || '[]');
+    let solicitudActual = 0;
+    let sugerenciaIA = null;
+
+    const pad = n => String(n).padStart(2, '0');
+    const horaLocal = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const fechaLocal = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const ahoraLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const formatearEntrega = valor => new Date(valor).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' });
+
+    function sugerenciaLocal(entrega) {
+      const limite = new Date(entrega);
+      const ahora = new Date();
+      for (let dia = 0; dia < 7; dia++) {
+        for (const ventana of VENTANAS) {
+          const inicio = new Date(ahora);
+          inicio.setDate(ahora.getDate() + dia);
+          inicio.setHours(ventana.inicio, 0, 0, 0);
+          const fin = new Date(inicio);
+          fin.setHours(ventana.fin, 0, 0, 0);
+          if (inicio > ahora && inicio < limite) {
+            return `${fechaLocal(inicio)} de ${horaLocal(inicio)} a ${horaLocal(fin)} (${ventana.motivo})`;
+          }
+        }
+      }
+      return 'No hay bloques libres antes de la entrega; conviene empezar hoy.';
+    }
+
+    function textoIA(s) {
+      return `${s.fecha} de ${s.inicio} a ${s.fin} (${s.motivo})`;
+    }
+
+    async function pedirSugerencia() {
+      const entrega = entregaInput.value;
+      sugerenciaIA = null;
+      if (!entrega) {
+        sugerenciaEl.textContent = '';
+        return;
+      }
+      const solicitud = ++solicitudActual;
+      sugerenciaEl.textContent = `Sugerencia: ${sugerenciaLocal(entrega)}. Buscando una mejor opción con IA…`;
+      try {
+        const respuesta = await fetch('/api/sugerir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ahora: ahoraLocal(), entrega })
+        });
+        if (!respuesta.ok) throw new Error('sin sugerencia IA');
+        const datos = await respuesta.json();
+        if (solicitud !== solicitudActual) return;
+        sugerenciaIA = textoIA(datos);
+        sugerenciaEl.textContent = `Sugerencia IA: ${sugerenciaIA}.`;
+      } catch {
+        if (solicitud !== solicitudActual) return;
+        sugerenciaEl.textContent = `Sugerencia: ${sugerenciaLocal(entrega)}.`;
+      }
+    }
+
+    function renderizarLista() {
+      listaEl.replaceChildren(...pendientes.map(p => {
+        const li = document.createElement('li');
+        const titulo = document.createElement('strong');
+        titulo.textContent = `${p.curso}: ${p.titulo}`;
+        const detalle = document.createElement('small');
+        detalle.textContent = `Entrega ${formatearEntrega(p.entrega)} · Bloque sugerido: ${p.sugerencia}`;
+        li.append(titulo, detalle);
+        return li;
+      }));
+    }
+
+    entregaInput.addEventListener('change', pedirSugerencia);
+
+    formulario.addEventListener('submit', event => {
+      event.preventDefault();
+      errorEl.textContent = '';
+      const curso = formulario.elements.curso.value.trim();
+      const titulo = formulario.elements.titulo.value.trim();
+      const entrega = entregaInput.value;
+
+      if (!curso || !titulo || !entrega) {
+        errorEl.textContent = 'Completa el curso, el título y la fecha de entrega.';
+        return;
+      }
+      if (new Date(entrega) <= new Date()) {
+        errorEl.textContent = 'La fecha de entrega debe ser futura.';
+        return;
+      }
+
+      pendientes.unshift({
+        id: Date.now(),
+        curso,
+        titulo,
+        entrega,
+        sugerencia: sugerenciaIA || sugerenciaLocal(entrega),
+        creado: new Date().toISOString()
+      });
+      localStorage.setItem(CLAVE, JSON.stringify(pendientes));
+
+      formulario.reset();
+      solicitudActual++;
+      sugerenciaIA = null;
+      sugerenciaEl.textContent = '';
+      renderizarLista();
+
+      botonGuardar.textContent = 'Guardado';
+      setTimeout(() => { botonGuardar.textContent = 'Guardar pendiente'; }, 1500);
+    });
+
+    renderizarLista();
   </script>
 </body>
 </html>
