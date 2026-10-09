@@ -46,6 +46,8 @@
     .boton.principal { background: var(--azul); color: #fff; }
     .boton.principal:hover { background: var(--azul-oscuro); }
     .error { color: var(--urgente); font-size: 0.9rem; margin: 0; min-height: 1em; }
+    .hecho { justify-self: start; margin-top: 6px; font-size: 0.9rem; padding: 8px 12px; color: var(--exito); border-color: var(--exito); }
+    .enlace-nav { color: var(--azul); text-decoration: none; font-weight: bold; font-size: 0.95rem; }
     .boton-mas { position: fixed; right: 24px; bottom: 24px; width: 64px; height: 64px; border-radius: 50%; background: var(--azul); color: #fff; font-size: 2.2rem; line-height: 64px; text-align: center; text-decoration: none; box-shadow: 0 6px 16px rgba(5, 28, 44, 0.25); }
     .boton-mas:hover { background: var(--azul-oscuro); }
   </style>
@@ -55,6 +57,7 @@
     <header>
       <p class="fecha" id="fecha"></p>
       <h1 id="saludo"></h1>
+      <a class="enlace-nav" href="/progreso.html">Mi progreso →</a>
     </header>
 
     <section aria-labelledby="titulo-carga">
@@ -220,8 +223,22 @@
       const detalle = document.createElement('small');
       detalle.textContent = `Bloque sugerido: ${p.sugerencia}`;
 
-      li.append(cuando, titulo, detalle);
+      const hecho = document.createElement('button');
+      hecho.type = 'button';
+      hecho.className = 'boton hecho';
+      hecho.textContent = 'Marcar como hecho';
+      hecho.addEventListener('click', () => marcarHecho(p.id));
+
+      li.append(cuando, titulo, detalle, hecho);
       return li;
+    }
+
+    function marcarHecho(id) {
+      const pendientes = leerJSON(CLAVE_PENDIENTES, []).map(p => (
+        p.id === id ? { ...p, completado: true, completadoEn: new Date().toISOString() } : p
+      ));
+      localStorage.setItem(CLAVE_PENDIENTES, JSON.stringify(pendientes));
+      renderEntregables();
     }
 
     function renderEntregables() {
@@ -229,6 +246,7 @@
       const limite = ahora.getTime() + 7 * DIA_MS;
       const proximos = leerJSON(CLAVE_PENDIENTES, [])
         .filter(p => {
+          if (p.completado) return false;
           const t = new Date(p.entrega).getTime();
           return t >= ahora.getTime() && t <= limite;
         })

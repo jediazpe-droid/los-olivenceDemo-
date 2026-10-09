@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mi progreso · Rincón de bienestar</title>
+  <style>
+    :root { --azul: #1e6fd9; --azul-oscuro: #1858b0; --texto: #1f2d3d; --suave: #55657a; --fondo: #f7fafc; --borde: #d5dde6; --exito: #1f9d55; }
+    * { box-sizing: border-box; }
+    body { font-family: Calibri, Arial, sans-serif; margin: 0; background: var(--fondo); color: var(--texto); padding: 24px 16px 48px; }
+    main { max-width: 520px; margin: 0 auto; display: grid; gap: 20px; }
+    .volver { color: var(--azul); text-decoration: none; font-size: 0.95rem; }
+    h1 { color: #051c2c; font-size: 1.8rem; margin: 8px 0 4px; }
+    h2 { font-size: 1.1rem; margin: 0 0 12px; color: #051c2c; }
+    h3 { font-size: 0.95rem; margin: 20px 0 8px; color: var(--suave); }
+    .sub { margin: 0; color: var(--suave); }
+    section { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 20px; }
+    section > p { margin: 0 0 12px; line-height: 1.45; }
+    .resumen { font-weight: bold; font-size: 1.05rem; margin: 0 0 12px; }
+    .barra-progreso { height: 18px; background: #e6edf5; border-radius: 9px; overflow: hidden; }
+    #relleno { height: 100%; width: 0; background: var(--exito); border-radius: 9px; transition: width 0.4s ease; }
+    .meta { margin-top: 16px; }
+    label { display: grid; gap: 6px; font-weight: bold; font-size: 0.95rem; max-width: 220px; }
+    input { font: inherit; font-weight: normal; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; }
+    input:focus { outline: 2px solid var(--azul); border-color: transparent; }
+    .secundario { color: var(--suave); font-size: 0.95rem; margin: 14px 0 0; }
+    ul.lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .item { border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; }
+    .item small { color: var(--suave); }
+    .habito { border-left: 4px solid var(--exito); padding: 10px 12px; background: #f3fbf6; border-radius: 8px; }
+    .vacio { color: var(--suave); font-size: 0.95rem; margin: 8px 0 0; }
+    .vacio[hidden] { display: none; }
+    .boton-apoyo { display: inline-block; padding: 14px 20px; border-radius: 8px; background: var(--azul); color: #fff; text-decoration: none; font-weight: bold; }
+    .boton-apoyo:hover { background: var(--azul-oscuro); }
+    .boton-apoyo.pendiente { background: #9aa8b8; pointer-events: none; }
+    .nota { font-size: 0.85rem; color: var(--suave); margin: 10px 0 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="volver" href="/">← Mi Día</a>
+      <h1>Mi progreso</h1>
+      <p class="sub">Cada avance cuenta.</p>
+    </header>
+
+    <section aria-labelledby="titulo-logros">
+      <h2 id="titulo-logros">Barra de logros</h2>
+      <p class="resumen" id="resumen"></p>
+      <div class="barra-progreso" role="progressbar" aria-label="Avances de esta semana frente a la meta" aria-valuemin="0" aria-valuemax="100" id="progreso">
+        <div id="relleno"></div>
+      </div>
+      <div class="meta">
+        <label>Mi meta semanal de avances
+          <input type="number" id="meta" min="1" max="50" value="5">
+        </label>
+      </div>
+      <p class="secundario" id="total"></p>
+
+      <h3>Completados recientes</h3>
+      <ul class="lista" id="recientes"></ul>
+      <p class="vacio" id="sin-completados" hidden>Aún no has completado avances. Márcalos como hechos desde Mi Día.</p>
+    </section>
+
+    <section aria-labelledby="titulo-habitos">
+      <h2 id="titulo-habitos">Recomendaciones de hoy</h2>
+      <ul class="lista" id="habitos"></ul>
+    </section>
+
+    <section aria-labelledby="titulo-apoyo">
+      <h2 id="titulo-apoyo">¿Sientes sobrecarga o estrés?</h2>
+      <p>Pedir apoyo es una buena decisión. El servicio de tutoría y apoyo estudiantil puede acompañarte a organizar tus tareas y tus tiempos de descanso.</p>
+      <a class="boton-apoyo" id="derivacion" target="_blank" rel="noopener">Contactar tutoría y apoyo estudiantil</a>
+      <p class="nota">Esta herramienta no realiza diagnósticos. Si sientes que estás en peligro, acude de inmediato a los servicios de emergencia de tu localidad.</p>
+    </section>
+  </main>
+
+  <script>
+    const CLAVE_PENDIENTES = 'pendientes';
+    const CLAVE_META = 'meta_semanal';
+    const URL_APOYO = ''; // Reemplazar con el enlace oficial del servicio de tutoría institucional
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const HABITOS = [
+      'Haz una pausa activa de 5 minutos cada 50 minutos de estudio: camina y estírate.',
+      'Regla 20-20-20: cada 20 minutos mira algo a unos 6 metros durante 20 segundos.',
+      'Trabaja en bloques de 25 minutos y descansa 5 entre uno y otro.',
+      'Respira lento un minuto: inhala contando 4 y exhala contando 6.',
+      'Antes de estudiar en bloques largos, come algo y toma agua.',
+      'Define una hora para dejar las pantallas por la noche y protege tu descanso.',
+      'Anota tres cosas que salieron bien hoy antes de dormir.'
+    ];
+
+    function leerJSON(clave, respaldo) {
+      try {
+        return JSON.parse(localStorage.getItem(clave)) ?? respaldo;
+      } catch {
+        return respaldo;
+      }
+    }
+
+    function inicioSemana(ahora) {
+      const lunes = new Date(ahora);
+      lunes.setDate(ahora.getDate() - ((ahora.getDay() + 6) % 7));
+      lunes.setHours(0, 0, 0, 0);
+      return lunes;
+    }
+
+    function renderLogros() {
+      const ahora = new Date();
+      const completados = leerJSON(CLAVE_PENDIENTES, [])
+        .filter(p => p.completado)
+        .sort((a, b) => new Date(b.completadoEn) - new Date(a.completadoEn));
+      const lunes = inicioSemana(ahora);
+      const estaSemana = completados.filter(p => new Date(p.completadoEn) >= lunes).length;
+      const meta = leerJSON(CLAVE_META, 5);
+      const porcentaje = Math.min(100, Math.round((estaSemana / meta) * 100));
+
+      document.getElementById('resumen').textContent = estaSemana >= meta
+        ? `¡Meta cumplida! ${estaSemana} de ${meta} avances esta semana.`
+        : `${estaSemana} de ${meta} avances esta semana.`;
+      document.getElementById('relleno').style.width = `${porcentaje}%`;
+      document.getElementById('progreso').setAttribute('aria-valuenow', porcentaje);
+      document.getElementById('total').textContent = `Llevas ${completados.length} avances completados en total.`;
+
+      document.getElementById('recientes').replaceChildren(...completados.slice(0, 5).map(p => {
+        const li = document.createElement('li');
+        li.className = 'item';
+        const titulo = document.createElement('strong');
+        titulo.textContent = `${p.curso}: ${p.titulo}`;
+        const fecha = document.createElement('small');
+        fecha.textContent = `Completado el ${new Date(p.completadoEn).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}`;
+        li.append(titulo, fecha);
+        return li;
+      }));
+      document.getElementById('sin-completados').hidden = completados.length > 0;
+    }
+
+    function renderHabitos() {
+      const ahora = new Date();
+      const diaDelAno = Math.floor((ahora - new Date(ahora.getFullYear(), 0, 0)) / DIA_MS);
+      const inicio = diaDelAno % HABITOS.length;
+      const seleccion = [0, 1, 2].map(i => HABITOS[(inicio + i) % HABITOS.length]);
+      document.getElementById('habitos').replaceChildren(...seleccion.map(texto => {
+        const li = document.createElement('li');
+        li.className = 'habito';
+        li.textContent = texto;
+        return li;
+      }));
+    }
+
+    function configurarApoyo() {
+      const enlace = document.getElementById('derivacion');
+      if (URL_APOYO) {
+        enlace.href = URL_APOYO;
+      } else {
+        enlace.textContent = 'Enlace institucional pendiente de configurar';
+        enlace.classList.add('pendiente');
+        enlace.removeAttribute('target');
+      }
+    }
+
+    document.getElementById('meta').addEventListener('change', event => {
+      const valor = Math.max(1, Math.min(50, Number(event.target.value) || 5));
+      event.target.value = valor;
+      localStorage.setItem(CLAVE_META, JSON.stringify(valor));
+      renderLogros();
+    });
+
+    document.getElementById('meta').value = leerJSON(CLAVE_META, 5);
+    renderLogros();
+    renderHabitos();
+    configurarApoyo();
+  </script>
+</body>
+</html>
